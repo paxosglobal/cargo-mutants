@@ -29,13 +29,14 @@ pub fn test_mutants(
     workspace_dir: &Utf8Path,
     options: Options,
     console: &Console,
+    last_positive_outcomes: Option<PositiveOutcomes>,
 ) -> Result<LabOutcome> {
     let start_time = Instant::now();
     let output_in_dir: &Utf8Path = options
         .output_in_dir
         .as_ref()
         .map_or(workspace_dir, |p| p.as_path());
-    let output_dir = OutputDir::new(output_in_dir)?;
+    let output_dir = OutputDir::new(output_in_dir, last_positive_outcomes)?;
     console.set_debug_log(output_dir.open_debug_log()?);
 
     if options.shuffle {

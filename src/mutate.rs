@@ -2,8 +2,12 @@
 
 //! Mutations to source files, and inference of interesting mutations to apply.
 
+use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::fs;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::hash::SipHasher;
 use std::sync::Arc;
 
 use anyhow::{ensure, Context, Result};
@@ -20,14 +24,14 @@ use crate::textedit::{replace_region, Span};
 const MUTATION_MARKER_COMMENT: &str = "/* ~ changed by cargo-mutants ~ */";
 
 /// Various broad categories of mutants.
-#[derive(Clone, Eq, PartialEq, Debug, Serialize)]
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Hash)]
 pub enum Genre {
     /// Replace the body of a function with a fixed value.
     FnValue,
 }
 
 /// A mutation applied to source code.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Mutant {
     /// Which file is being mutated.
     pub source_file: Arc<SourceFile>,
@@ -145,7 +149,18 @@ impl Mutant {
             self.span.start.line
         )
     }
+
+    pub fn calculate_hash(&self) -> MutantHash {
+        // We need the hashes to be stable across restarts, so that they can be serialized
+        // consistently.
+        let mut s = SipHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
 }
+
+/// A hash of a mutant, used to identify it across runs.
+pub type MutantHash = u64;
 
 impl fmt::Debug for Mutant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -185,6 +185,10 @@ struct Args {
     #[arg(long, short = 'D')]
     in_diff: Option<Utf8PathBuf>,
 
+    /// Incremental run, testing only the mutants that weren’t caught in the previous run
+    #[arg(long, short = 'i')]
+    incremental: bool,
+
     /// only test mutants from these packages.
     #[arg(id = "package", long, short = 'p')]
     mutate_packages: Vec<String>,
@@ -290,10 +294,20 @@ fn main() -> Result<()> {
             &read_to_string(in_diff).context("Failed to read filter diff")?,
         )?;
     }
+    let mut last_positive_outcomes = None()
+    if args.incremental {
+        last_positive_outcomes, mutants = todo!("incremental stuff")
+    }
     if args.list {
         list_mutants(FmtToIoWrite::new(io::stdout()), &mutants, &options)?;
     } else {
-        let lab_outcome = test_mutants(mutants, &workspace.dir, options, &console)?;
+        let lab_outcome = test_mutants(
+            mutants,
+            &workspace.dir,
+            options,
+            &console,
+            last_positive_outcomes,
+        )?;
         exit(lab_outcome.exit_code());
     }
     Ok(())

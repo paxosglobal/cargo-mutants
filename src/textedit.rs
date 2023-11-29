@@ -5,7 +5,7 @@
 use serde::Serialize;
 
 /// A (line, column) position in a source file.
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Serialize)]
 pub struct LineColumn {
     /// 1-based line number.
     pub line: usize,
@@ -26,7 +26,7 @@ impl From<proc_macro2::LineColumn> for LineColumn {
 /// A contiguous text span in a file.
 ///
 /// TODO: Perhaps a semi-open range that can represent an empty span would be more general?
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Hash)]
 pub struct Span {
     /// The inclusive position where the span starts.
     pub start: LineColumn,
