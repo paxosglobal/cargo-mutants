@@ -3,14 +3,21 @@
 //! Logic for incremantal runs
 use crate::{
     mutate::{Mutant, MutantHash},
+    options::Options,
     output::{PositiveOutcome, OUTDIR_NAME, POSITIVE_OUTCOMES_FILE},
 };
 use anyhow::{anyhow, Result};
-use std::{collections::HashSet, fs, path::PathBuf};
+use camino::{Utf8Path, Utf8PathBuf};
+use std::{collections::HashSet, fs};
 
-pub fn filter(mutants: Vec<Mutant>) -> (Option<Vec<PositiveOutcome>>, Vec<Mutant>) {
+pub fn filter_by_last_positive_outcomes(
+    mutants: Vec<Mutant>,
+    dir: &Utf8PathBuf,
+    options: &Options,
+) -> (Option<Vec<PositiveOutcome>>, Vec<Mutant>) {
+    let read_path: &Utf8Path = options.output_in_dir.as_ref().map_or(dir, |p| p.as_path());
     // TODO: add logging here for error cases
-    let last_positive_outcomes = match read_last_positive_outcomes() {
+    let last_positive_outcomes = match read_last_positive_outcomes(read_path) {
         Ok(outcomes) => Some(outcomes),
         Err(_) => None,
     };
@@ -27,18 +34,11 @@ pub fn filter(mutants: Vec<Mutant>) -> (Option<Vec<PositiveOutcome>>, Vec<Mutant
     (last_positive_outcomes, mutants)
 }
 
-fn read_last_positive_outcomes() -> Result<Vec<PositiveOutcome>> {
-    // TODO: Add in_dir here to support user specified output directories
-    let path: PathBuf = [
-        env!("CARGO_MANIFEST_DIR"),
-        OUTDIR_NAME,
-        POSITIVE_OUTCOMES_FILE,
-    ]
-    .iter()
-    .collect();
+fn read_last_positive_outcomes(read_path: &Utf8Path) -> Result<Vec<PositiveOutcome>> {
+    let path = read_path.join(OUTDIR_NAME).join(POSITIVE_OUTCOMES_FILE);
     let json_str = fs::read_to_string(path.clone());
     match json_str {
         Ok(contents) => serde_json::from_str(&contents).map_err(|e| anyhow!("{}", e)),
-        Err(_) => Err(anyhow!("Failed to read file at path: {}", path.display())),
+        Err(e) => Err(anyhow!("{}", e)),
     }
 }

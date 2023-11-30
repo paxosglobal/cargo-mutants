@@ -2,7 +2,6 @@
 
 //! Mutations to source files, and inference of interesting mutations to apply.
 
-use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::fs;
 use std::hash::Hash;

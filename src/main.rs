@@ -297,7 +297,8 @@ fn main() -> Result<()> {
     }
     let mut last_positive_outcomes = None;
     if args.incremental {
-        (last_positive_outcomes, mutants) = incremental::filter(mutants);
+        (last_positive_outcomes, mutants) =
+            incremental::filter_by_last_positive_outcomes(mutants, &workspace.dir, &options);
     }
     if args.list {
         list_mutants(FmtToIoWrite::new(io::stdout()), &mutants, &options)?;
