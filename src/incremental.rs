@@ -14,7 +14,7 @@ pub fn filter(mutants: Vec<Mutant>) -> (Option<Vec<PositiveOutcome>>, Vec<Mutant
         Ok(outcomes) => Some(outcomes),
         Err(_) => None,
     };
-    // if last_positive_outcomes is none the hash set will be empty thereby allowing
+    // if last_positive_outcomes is none the hash set will be empty thereby allowing all mutants to be considered
     let existing_mutants: HashSet<MutantHash> = last_positive_outcomes
         .iter()
         .flatten()
@@ -28,8 +28,6 @@ pub fn filter(mutants: Vec<Mutant>) -> (Option<Vec<PositiveOutcome>>, Vec<Mutant
 }
 
 fn read_last_positive_outcomes() -> Result<Vec<PositiveOutcome>> {
-    // if the positive_outcomes file exists, read it and return the deserialized vector of PositiveOutcome
-    // else return None
     // TODO: Add in_dir here to support user specified output directories
     let path: PathBuf = [
         env!("CARGO_MANIFEST_DIR"),
