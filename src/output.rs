@@ -11,7 +11,6 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs2::FileExt;
-use itertools::Itertools;
 use path_slash::PathExt;
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
@@ -22,8 +21,10 @@ use crate::mutate::MutantHash;
 use crate::outcome::{LabOutcome, SummaryOutcome};
 use crate::*;
 
-const OUTDIR_NAME: &str = "mutants.out";
-const ROTATED_NAME: &str = "mutants.out.old";
+pub const OUTDIR_NAME: &str = "mutants.out";
+pub const ROTATED_NAME: &str = "mutants.out.old";
+pub const OUTCOMES_FILE: &str = "outcomes.json";
+pub const POSITIVE_OUTCOMES_FILE: &str = "positive_outcomes.json";
 const LOCK_JSON: &str = "lock.json";
 const LOCK_POLL: Duration = Duration::from_millis(100);
 
@@ -100,7 +101,7 @@ pub struct OutputDir {
     /// A file holding a list of mutants where testing timed out, as text, one per line.
     timeout_list: File,
     unviable_list: File,
-    last_positive_outcomes: Option<PositiveOutcomes>,
+    last_positive_outcomes: Option<Vec<PositiveOutcome>>,
     /// The accumulated overall lab outcome.
     pub lab_outcome: LabOutcome,
 }
@@ -118,7 +119,7 @@ impl OutputDir {
     /// the lock to be released. The returned `OutputDir` holds a lock for its lifetime.
     pub fn new(
         in_dir: &Utf8Path,
-        last_positive_outcomes: Option<PositiveOutcomes>,
+        last_positive_outcomes: Option<Vec<PositiveOutcome>>,
     ) -> Result<OutputDir> {
         if !in_dir.exists() {
             fs::create_dir(in_dir).context("create output parent directory {in_dir:?}")?;
@@ -189,20 +190,20 @@ impl OutputDir {
     ///
     /// Called multiple times as the lab runs.
     pub fn maybe_write_positive_outcomes(&self) -> Result<()> {
-        if let Some(last_positive_outcomes) = self.last_positive_outcomes {
+        if let Some(last_positive_outcomes) = &self.last_positive_outcomes {
             let positive_outcomes = self
                 .lab_outcome
                 .outcomes
                 .iter()
-                .filter_map(|o: &ScenarioOutcome| &PositiveOutcome::try_from(o).ok())
-                .chain(last_positive_outcomes.iter())
-                .collect::<&PositiveOutcomes>();
+                .filter_map(|o: &ScenarioOutcome| PositiveOutcome::try_from(o).ok())
+                .chain(last_positive_outcomes.iter().cloned())
+                .collect::<Vec<PositiveOutcome>>();
 
             serde_json::to_writer_pretty(
-                BufWriter::new(File::create(self.path.join("positive_outcomes.json"))?),
+                BufWriter::new(File::create(self.path.join(POSITIVE_OUTCOMES_FILE))?),
                 &positive_outcomes,
             )
-            .context("write positive_outcomes.json")
+            .context(format!("write {}", POSITIVE_OUTCOMES_FILE))
         } else {
             Ok(())
         }
@@ -213,10 +214,10 @@ impl OutputDir {
     /// Called multiple times as the lab runs.
     pub fn write_lab_outcome(&self) -> Result<()> {
         serde_json::to_writer_pretty(
-            BufWriter::new(File::create(self.path.join("outcomes.json"))?),
+            BufWriter::new(File::create(self.path.join(OUTCOMES_FILE))?),
             &self.lab_outcome,
         )
-        .context("write outcomes.json")
+        .context(format!("write {}", OUTCOMES_FILE))
     }
 
     /// Add the result of testing one scenario.
@@ -312,7 +313,7 @@ mod test {
         let tmp = minimal_source_tree();
         let tmp_path: &Utf8Path = tmp.path().try_into().unwrap();
         let workspace = Workspace::open(tmp_path).unwrap();
-        let output_dir = OutputDir::new(&workspace.dir).unwrap();
+        let output_dir = OutputDir::new(&workspace.dir, None).unwrap();
         assert_eq!(
             list_recursive(tmp.path()),
             &[
@@ -340,7 +341,7 @@ mod test {
         let temp_dir_path = Utf8Path::from_path(temp_dir.path()).unwrap();
 
         // Create an initial output dir with one log.
-        let output_dir = OutputDir::new(temp_dir_path).unwrap();
+        let output_dir = OutputDir::new(temp_dir_path, None).unwrap();
         output_dir.create_log(&Scenario::Baseline).unwrap();
         assert!(temp_dir
             .path()
@@ -349,7 +350,7 @@ mod test {
         drop(output_dir); // release the lock.
 
         // The second time we create it in the same directory, the old one is moved away.
-        let output_dir = OutputDir::new(temp_dir_path).unwrap();
+        let output_dir = OutputDir::new(temp_dir_path, None).unwrap();
         output_dir.create_log(&Scenario::Baseline).unwrap();
         assert!(temp_dir
             .path()
@@ -362,7 +363,7 @@ mod test {
         drop(output_dir);
 
         // The third time (and later), the .old directory is removed.
-        let output_dir = OutputDir::new(temp_dir_path).unwrap();
+        let output_dir = OutputDir::new(temp_dir_path, None).unwrap();
         output_dir.create_log(&Scenario::Baseline).unwrap();
         assert!(temp_dir
             .path()
@@ -379,33 +380,7 @@ mod test {
     }
 }
 
-/// Caught and unviable scenario outcomes
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct PositiveOutcomes {
-    /// Caught and unviable scenario outcomes
-    pub outcomes: Vec<PositiveOutcome>,
-}
-
-impl PositiveOutcomes {
-    fn new() -> Self {
-        Self {
-            outcomes: Vec::new(),
-        }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &PositiveOutcome> {
-        self.outcomes.iter()
-    }
-}
-
-impl FromIterator<&PositiveOutcome> for PositiveOutcomes {
-    fn from_iter<T: IntoIterator<Item = PositiveOutcome>>(iter: T) -> Self {
-        Self {
-            outcomes: iter.into_iter().collect(),
-        }
-    }
-}
-
+/// Caught and unviable scenario outcome
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct PositiveOutcome {
     pub mutant_hash: MutantHash,
@@ -420,12 +395,10 @@ impl PositiveOutcome {
                 mutant_hash: mutant.calculate_hash(),
                 summary,
             }),
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "summary {:?} does not belong to a positive outcome",
-                    summary
-                ))
-            }
+            _ => Err(anyhow::anyhow!(
+                "summary {:?} does not belong to a positive outcome",
+                summary
+            )),
         }
     }
 
@@ -447,9 +420,6 @@ impl TryFrom<&ScenarioOutcome> for PositiveOutcome {
                 ))
             }
         };
-        let summary = scenario_outcome.summary();
         Self::new(mutant, scenario_outcome.summary())
     }
 }
-
-impl PositiveOutcome {}
