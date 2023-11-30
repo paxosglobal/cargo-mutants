@@ -167,7 +167,7 @@ impl OutputDir {
             caught_list,
             timeout_list,
             unviable_list,
-            positive_outcomes,
+            last_positive_outcomes,
         })
     }
 
@@ -194,9 +194,9 @@ impl OutputDir {
                 .lab_outcome
                 .outcomes
                 .iter()
-                .filter_map(|o: &ScenarioOutcome| PositiveOutcome::try_from(o).ok())
+                .filter_map(|o: &ScenarioOutcome| &PositiveOutcome::try_from(o).ok())
                 .chain(last_positive_outcomes.iter())
-                .collect::<PositiveOutcomes>();
+                .collect::<&PositiveOutcomes>();
 
             serde_json::to_writer_pretty(
                 BufWriter::new(File::create(self.path.join("positive_outcomes.json"))?),
@@ -204,7 +204,7 @@ impl OutputDir {
             )
             .context("write positive_outcomes.json")
         } else {
-            Ok()
+            Ok(())
         }
     }
 
@@ -392,9 +392,13 @@ impl PositiveOutcomes {
             outcomes: Vec::new(),
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &PositiveOutcome> {
+        self.outcomes.iter()
+    }
 }
 
-impl FromIterator<PositiveOutcome> for PositiveOutcomes {
+impl FromIterator<&PositiveOutcome> for PositiveOutcomes {
     fn from_iter<T: IntoIterator<Item = PositiveOutcome>>(iter: T) -> Self {
         Self {
             outcomes: iter.into_iter().collect(),
@@ -423,6 +427,11 @@ impl PositiveOutcome {
                 ))
             }
         }
+    }
+
+    /// Gets the hash of the associated mutant
+    pub fn mutant_hash(&self) -> MutantHash {
+        self.mutant_hash
     }
 }
 

@@ -16,7 +16,7 @@ use tracing::{debug, debug_span, error, info, trace};
 use crate::cargo::run_cargo;
 use crate::console::Console;
 use crate::outcome::{LabOutcome, Phase, ScenarioOutcome};
-use crate::output::OutputDir;
+use crate::output::{OutputDir, PositiveOutcomes};
 use crate::package::Package;
 use crate::*;
 

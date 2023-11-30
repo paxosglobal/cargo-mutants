@@ -10,6 +10,7 @@ mod copy_tree;
 mod exit_code;
 mod fnvalue;
 mod in_diff;
+mod incremental;
 mod interrupt;
 mod lab;
 mod list;
@@ -294,9 +295,9 @@ fn main() -> Result<()> {
             &read_to_string(in_diff).context("Failed to read filter diff")?,
         )?;
     }
-    let mut last_positive_outcomes = None()
+    let mut last_positive_outcomes = None;
     if args.incremental {
-        last_positive_outcomes, mutants = todo!("incremental stuff")
+        (last_positive_outcomes, mutants) = incremental::filter(mutants);
     }
     if args.list {
         list_mutants(FmtToIoWrite::new(io::stdout()), &mutants, &options)?;
