@@ -396,7 +396,7 @@ impl PositiveOutcome {
                 summary,
             }),
             _ => Err(anyhow::anyhow!(
-                "summary {:?} does not belong to a positive outcome",
+                "outcome {:?} isn’t a positive outcome",
                 summary
             )),
         }
